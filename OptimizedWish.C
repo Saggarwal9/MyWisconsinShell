@@ -12,6 +12,7 @@ int batch=0;
 int pathChanged=0;
 char *path;
 int CLOSED=0;
+int pathEmpty=0;
 
 
 void printError(){
@@ -31,16 +32,17 @@ int newProcess(char *myargs[]) {
                 printError();
                 exit(1); 
         }
-        else if(rc==0){ //Child process
+        else if(rc==0 && pathEmpty!=1){ //Child process
                 if(pathChanged==0)
                         path=strdup("/bin/");
                   path=strcat(path,myargs[0]);
-                  if(access(path,X_OK)!=0){//successfully accessed binary or not?
-                                if(pathChanged==0)
-                                        path=strdup("/usr/bin/");
+                  //printf("path changed %d\n", pathChanged);
+                  if(access(path,X_OK)!=0 && pathChanged==0){//successfully accessed binary or not?
+                                path=strdup("/usr/bin/");
                                 path=strcat(path,myargs[0]);
                                 if(access(path,X_OK)!=0){
                                         write(STDERR_FILENO, ERROR_MESSAGE, strlen(ERROR_MESSAGE));
+                                        exit(0);
                                 }             
                   }
                   if(execv(path,myargs)==-1){//successfuly executed binary or not? 
@@ -141,11 +143,19 @@ int preProcess(char *buffer){
                                         pathChanged=1;
                                         path=strdup(command[1]);
                                         
-                                }
-                                else{ //0 Arguments or more than 2 arguments?
-                                        write(STDERR_FILENO, ERROR_MESSAGE, strlen(ERROR_MESSAGE));
                                         
-                                }         
+                                }
+                                else if(p==1){
+                                        pathChanged=1;
+                                        pathEmpty=1;
+                                }
+                                else{ 
+                                          
+                                }
+                                if(path[strlen(path)-1]!='/' && pathEmpty!=1){
+                                                strcat(path,"/");
+                                }
+                                       
 			}
                         else if(strcmp(command[0],"exit") == 0) {
 			    if(p==1){
@@ -208,9 +218,6 @@ int main(int argc, char* argv[]){
                                 
                         }
                         myargs[j+1]=NULL;
-                        if(j!=2){
-                                
-                        }
                         int pid[j];
                         for(int i=0;i<j;i++)
                                 pid[i]=preProcess(myargs[i]);
