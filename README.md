@@ -1,4 +1,7 @@
 
+** Comp Sci 537 P2A Shell Project **
+https://github.com/remzi-arpacidusseau/ostep-projects/tree/master/processes-shell
+
 # Unix Shell
 
 In this project, you'll build a simple Unix shell. The shell is the heart of
