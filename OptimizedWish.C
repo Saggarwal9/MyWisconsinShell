@@ -84,7 +84,6 @@ int newProcess(char *myargs[]) {
         }
         else {
                 int returnStatus=0;
-                waitpid(rc, &returnStatus, 0);
         }
         return rc;
 }
