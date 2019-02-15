@@ -4,14 +4,29 @@
 #include<unistd.h>
 #include<sys/wait.h>
 #include<fcntl.h>
+#include<ctype.h>
 
-#define BSIZE 512
-
+int BSIZE= 512;
 char ERROR_MESSAGE[128] = "An error has occurred\n";
 int batch=0;
 int pathChanged=0;
 char *path;
 int CLOSED=0;
+int pathEmpty=0;
+char multiPath[512][512];
+int numberMultiPath=0;
+
+
+int checkOnlySpace(char* buffer){
+        int flag=0;
+        for(int i=0;i<strlen(buffer);i++){
+                if(isspace(buffer[i])==0){
+                        flag=1;
+                        break;
+                }
+        }        
+        return flag;
+}       
 
 
 void printError(){
@@ -31,17 +46,35 @@ int newProcess(char *myargs[]) {
                 printError();
                 exit(1); 
         }
-        else if(rc==0){ //Child process
-                if(pathChanged==0)
+        else if(rc==0 && pathEmpty!=1){ //Child process
+                if(pathChanged==0){
                         path=strdup("/bin/");
-                  path=strcat(path,myargs[0]);
-                  if(access(path,X_OK)!=0){//successfully accessed binary or not?
-                                if(pathChanged==0)
-                                        path=strdup("/usr/bin/");
+                        path=strcat(path,myargs[0]);
+                        if(access(path,X_OK)!=0 && pathChanged==0){//successfully accessed binary or not?
+                                path=strdup("/usr/bin/");
                                 path=strcat(path,myargs[0]);
                                 if(access(path,X_OK)!=0){
                                         write(STDERR_FILENO, ERROR_MESSAGE, strlen(ERROR_MESSAGE));
-                                }             
+                                        exit(0);
+                                }
+                        }             
+                  }
+                  else if(pathChanged==1 && numberMultiPath==0){
+                         path=strcat(path,myargs[0]);
+                        if(access(path,X_OK)!=0){
+                                        write(STDERR_FILENO, ERROR_MESSAGE, strlen(ERROR_MESSAGE));
+                                        exit(0);
+                                }
+                  }
+                  else{
+                        for(int x=0;x<numberMultiPath;x++){
+                                strcat(multiPath[x],myargs[0]);
+                                 if(access(multiPath[x],X_OK)==0){
+                                        strcpy(path,multiPath[x]);
+                                        break;
+                                }
+                        }
+                        
                   }
                   if(execv(path,myargs)==-1){//successfuly executed binary or not? 
                                 printError();
@@ -51,7 +84,7 @@ int newProcess(char *myargs[]) {
         }
         else {
                 int returnStatus=0;
-                
+                waitpid(rc, &returnStatus, 0);
         }
         return rc;
 }
@@ -137,15 +170,35 @@ int preProcess(char *buffer){
                                                         
                         }  
                         else if(strcmp(command[0],"path") == 0){
+                                pathChanged=1;
                                 if(p==2){
-                                        pathChanged=1;
+                                        pathEmpty=0;
                                         path=strdup(command[1]);
-                                        
+                                         if(path[strlen(path)-1]!='/'){
+                                                strcat(path,"/");
+                                        }      
                                 }
-                                else{ //0 Arguments or more than 2 arguments?
-                                        write(STDERR_FILENO, ERROR_MESSAGE, strlen(ERROR_MESSAGE));
+                                else if(p==1){
+                                       
+                                        pathEmpty=1;
+                                }
+                                else{ 
+                                        pathEmpty=0;
+                                        for(int i=1;i<p;i++){
+                                                char *temp=strdup(command[i]);
+                                                if(temp[strlen(temp)-1]!='/')
+                                                        strcat(temp,"/");
+                                                strcpy(multiPath[i-1],temp);
+                                                numberMultiPath++;
+                                        }
                                         
-                                }         
+                                        //printf("%d\n",numberMultiPath);
+                                        //for(int i=0;i<numberMultiPath;i++)
+                                                //printf("%s\n",multiPath[i]);
+                        
+                                }
+                                
+                                       
 			}
                         else if(strcmp(command[0],"exit") == 0) {
 			    if(p==1){
@@ -157,7 +210,10 @@ int preProcess(char *buffer){
                                 }
                         }    
                         else{
-                                rc=newProcess(command);
+                                if(pathEmpty==1)
+                                        write(STDERR_FILENO, ERROR_MESSAGE, strlen(ERROR_MESSAGE));
+                                else
+                                        rc=newProcess(command);
                         }
 
                 }
@@ -194,9 +250,12 @@ int main(int argc, char* argv[]){
         else{
                 printError();
         }
-        
+
         while(fgets(buffer, BSIZE, file)){ //Writes from file to buffer
                 CLOSED=0;
+                if(checkOnlySpace(buffer)==0){ //Checks if the buffer is only space.
+                        continue;
+                }
                 if(strstr(buffer,"&")!=NULL){//Concurrency
                         int j=0;
                         char *myargs[sizeof(buffer)];
@@ -208,25 +267,23 @@ int main(int argc, char* argv[]){
                                 
                         }
                         myargs[j+1]=NULL;
-                        if(j!=2){
-                                
-                        }
                         int pid[j];
-                        for(int i=0;i<j;i++)
+                        for(int i=0;i<j;i++){
                                 pid[i]=preProcess(myargs[i]);
                                 
-                        for(int i=0;i<j;i++){
+                        for(int x=0;x<j;i++){
                                 int returnStatus=0;
-                                waitpid(pid[i],&returnStatus,0);                        
+                                waitpid(pid[x],&returnStatus,0);                        
                                 if (returnStatus == 1)      
                                 {
                                         printError();    
                                 }
                         
                         }
+                      }
                 }
                 else{
-                        preProcess(buffer);
+                    	preProcess(buffer);
                 }
                 if(argc == 1) {
                         printPrompt();
@@ -235,3 +292,4 @@ int main(int argc, char* argv[]){
         }
 }
         
+
